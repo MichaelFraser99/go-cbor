@@ -40,7 +40,12 @@ type Sign1 struct {
 | `,omitzero` | omit when the field `IsZero()` |
 | `,toarray` on `_ struct{}` | encode the whole struct as a positional array |
 
-> **Coming from `encoding/json`?** The API shape matches, but the semantics are CBOR's. Only `cbor:` tags are read — `json:` tags (including `json:"-"`) are ignored; untagged fields use the Go field name; field-name matching on decode is **case-sensitive** (unlike json). Embedded/anonymous struct fields follow `encoding/json`'s rules: an untagged embedded struct is flattened into the parent, a tagged one nests under its name, and conflicts resolve shallowest-wins. `json.RawMessage` has no special meaning — use `cbor.RawMessage`. Use `,omitzero` (not `,omitempty`) for `time.Time` and other structs — `omitempty` never omits a struct, so a zero `time.Time` is emitted as its year-1 sentinel. Decoding into `any` yields `cbor.Map` (ordered), not `map[string]any` — use `Map.ToStringMap()` or decode into a concrete type.
+**Coming from `encoding/json`?** Same API shape, CBOR semantics — the differences that bite:
+
+- **Decode matches field names case-sensitively** (json doesn't).
+- **Use `,omitzero`, not `,omitempty`, for `time.Time` and structs** — `omitempty` never omits a struct, so a zero `time.Time` encodes as its year-1 sentinel.
+- **`any` decodes to `cbor.Map`** (ordered), not `map[string]any` — use `Map.ToStringMap()` or a concrete type.
+- **Use `cbor.RawMessage`** (`json.RawMessage` isn't special). Embedded structs follow json's rules: untagged flattened, tagged nested, shallowest-wins.
 
 ## Type mapping
 
