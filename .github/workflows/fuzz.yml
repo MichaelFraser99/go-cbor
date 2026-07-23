@@ -2,7 +2,7 @@ name: Fuzz
 
 on:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "0 3 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -16,23 +16,64 @@ jobs:
       matrix:
         target: [FuzzRoundTrip, FuzzUnmarshal, FuzzValidMatchesDecode, FuzzDecoderStream]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Restore fuzz corpus
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/go-build/fuzz
           key: fuzz-${{ matrix.target }}-${{ github.run_id }}
           restore-keys: |
             fuzz-${{ matrix.target }}-
-      - name: Fuzz (15m)
-        run: go test -run '^$' -fuzz "^${{ matrix.target }}$" -fuzztime=15m .
+      - name: Fuzz (45m)
+        run: go test -run '^$' -fuzz "^${{ matrix.target }}$" -fuzztime=45m .
       - name: Upload reproducers
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-reproducers-${{ matrix.target }}
           path: testdata/fuzz/
           if-no-files-found: ignore
+
+  promote-reproducers:
+    needs: fuzz
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download reproducers
+        uses: actions/download-artifact@v8
+        with:
+          pattern: fuzz-reproducers-*
+          path: reproducers
+          merge-multiple: true
+      - name: Open PR with reproducers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$(find reproducers -type f 2>/dev/null)" ]; then
+            echo "No reproducers to promote"
+            exit 0
+          fi
+          mkdir -p testdata/fuzz
+          cp -R reproducers/. testdata/fuzz/
+          git add testdata/fuzz
+          if git diff --cached --quiet; then
+            echo "Reproducers already present in repo"
+            exit 0
+          fi
+          branch="fuzz-reproducer/${{ github.run_id }}-${{ github.run_attempt }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -m "fuzz: add crash reproducers from run ${{ github.run_id }}"
+          git push origin "$branch"
+          gh pr create \
+            --head "$branch" \
+            --title "fuzz: crash reproducers from run ${{ github.run_id }}" \
+            --body "A scheduled fuzz run found crashing input(s). Reproducers were added under \`testdata/fuzz/\`. Review, confirm they reproduce locally, and merge to lock them in as regression seeds."

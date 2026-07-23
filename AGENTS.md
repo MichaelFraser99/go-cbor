@@ -16,7 +16,7 @@ golangci-lint run                                # lint + gosec security checks
 govulncheck ./...                                # known-vulnerability scan
 ```
 
-Fuzz targets: `FuzzRoundTrip`, `FuzzUnmarshal`, `FuzzValidMatchesDecode`, `FuzzDecoderStream`. Run the relevant one after any change to encode/decode/framing — they are the real regression net. CI (`.github/workflows/ci.yml`) runs test/vet/gofmt/lint/govulncheck plus a 30s fuzz smoke on every push and PR; a nightly job (`fuzz.yml`) fuzzes each target for 15 minutes with an accumulating cached corpus.
+Fuzz targets: `FuzzRoundTrip`, `FuzzUnmarshal`, `FuzzValidMatchesDecode`, `FuzzDecoderStream`. Run the relevant one after any change to encode/decode/framing — they are the real regression net. CI (`.github/workflows/ci.yml`) runs test/vet/gofmt/lint/govulncheck plus a 30s fuzz smoke on every push and PR; a weekly job (`fuzz.yml`) fuzzes each target for 45 minutes against an accumulating cached corpus and, on a crash, opens a PR adding the reproducer under `testdata/fuzz/`.
 
 One-time local setup (macOS): `brew install golangci-lint pre-commit`, `go install golang.org/x/vuln/cmd/govulncheck@latest`, then `pre-commit install`. The pre-commit hooks (`.pre-commit-config.yaml`) run gofmt, go vet, golangci-lint, and the test suite.
 
